@@ -136,6 +136,8 @@ extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
     });
 #   if defined(SKYRIM_VERSION_AE2)
     v.UsesStructsPost629(true);
+    // Fork's loader reads Address Library format 5 (Skyrim 1.7.99+).
+    v.UsesAddressLibraryV5(true);
 #   endif
 
     return v;

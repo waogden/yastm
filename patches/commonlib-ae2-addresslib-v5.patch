@@ -1,0 +1,121 @@
+diff --git a/include/REL/Relocation.h b/include/REL/Relocation.h
+index 839c45fb..1e70a240 100644
+--- a/include/REL/Relocation.h
++++ b/include/REL/Relocation.h
+@@ -611,7 +611,7 @@ namespace REL
+ 				[](auto&& a_lhs, auto&& a_rhs) {
+ 					return a_lhs.id < a_rhs.id;
+ 				});
+-			if (it == _id2offset.end()) {
++			if (it == _id2offset.end() || it->id != a_id) {
+ 				stl::report_and_fail(
+ 					fmt::format(
+ 						"Failed to find the id within the address library: {}\n"
+@@ -687,8 +687,73 @@ namespace REL
+ 			load_file(filename, version);
+ 		}
+ 
++		// Address Library format 5 (Skyrim 1.7.99+): fixed 0x60-byte header
++		// followed by a flat uint32 array of offsets indexed by ID (0 = unused).
++		struct header_v5_t
++		{
++			std::int32_t  format;
++			std::uint32_t gameVersion[4];
++			char          name[64];
++			std::int32_t  pointerSize;
++			std::int32_t  dataFormat;
++			std::int32_t  offsetCount;
++		};
++		static_assert(sizeof(header_v5_t) == 0x60);
++
++		static std::int32_t peek_format(stl::zwstring a_filename)
++		{
++			std::ifstream in(std::filesystem::path(a_filename.data()), std::ios::binary);
++			std::int32_t  format = 0;
++			if (!in || !in.read(reinterpret_cast<char*>(&format), sizeof(format))) {
++				return -1;
++			}
++			return format;
++		}
++
++		void load_file_v5(stl::zwstring a_filename, Version a_version)
++		{
++			std::ifstream in(std::filesystem::path(a_filename.data()), std::ios::binary);
++			header_v5_t   header{};
++			if (!in || !in.read(reinterpret_cast<char*>(&header), sizeof(header))) {
++				stl::report_and_fail("Failed to read address library (format 5) header"sv);
++			}
++
++			Version fileVersion;
++			for (std::size_t i = 0; i < 4; ++i) {
++				fileVersion[i] = static_cast<std::uint16_t>(header.gameVersion[i]);
++			}
++			if (fileVersion != a_version) {
++				stl::report_and_fail("version mismatch"sv);
++			}
++			if (header.offsetCount <= 0) {
++				stl::report_and_fail("Address library (format 5) contains no offsets"sv);
++			}
++
++			std::vector<std::uint32_t> raw(static_cast<std::size_t>(header.offsetCount));
++			if (!in.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(raw.size() * sizeof(std::uint32_t)))) {
++				stl::report_and_fail("Address library (format 5) is truncated"sv);
++			}
++
++			// Convert to the sorted {id, offset} table the rest of this class
++			// expects. Process-private, so no clash with other plugins' named
++			// shared mappings.
++			_v5storage.clear();
++			_v5storage.reserve(raw.size());
++			for (std::size_t id = 0; id < raw.size(); ++id) {
++				if (raw[id] != 0) {
++					_v5storage.push_back({ static_cast<std::uint64_t>(id), static_cast<std::uint64_t>(raw[id]) });
++				}
++			}
++			_id2offset = { _v5storage.data(), _v5storage.size() };
++		}
++
+ 		void load_file(stl::zwstring a_filename, Version a_version)
+ 		{
++			if (peek_format(a_filename) == 5) {
++				load_file_v5(a_filename, a_version);
++				return;
++			}
++
+ 			try {
+ 				binary_io::file_istream in(a_filename);
+ 				header_t                header;
+@@ -809,8 +874,9 @@ namespace REL
+ 			}
+ 		}
+ 
+-		detail::memory_map   _mmap;
+-		std::span<mapping_t> _id2offset;
++		detail::memory_map     _mmap;
++		std::span<mapping_t>   _id2offset;
++		std::vector<mapping_t> _v5storage;
+ 	};
+ 
+ 	class Offset
+diff --git a/include/SKSE/Interfaces.h b/include/SKSE/Interfaces.h
+index fb1b7e14..2bb1e952 100644
+--- a/include/SKSE/Interfaces.h
++++ b/include/SKSE/Interfaces.h
+@@ -378,6 +378,7 @@ namespace SKSE
+ 		constexpr void UsesAddressLibrary(bool a_value) noexcept { addressLibrary = a_value; }
+ 		constexpr void UsesSigScanning(bool a_value) noexcept { sigScanning = a_value; }
+ 		constexpr void UsesStructsPost629(bool a_value) noexcept { structsPost629 = a_value; }
++		constexpr void UsesAddressLibraryV5(bool a_value) noexcept { addressLibraryV5 = a_value; }
+ 
+ 		const std::uint32_t dataVersion{ kVersion };
+ 		std::uint32_t       pluginVersion = 0;
+@@ -385,7 +386,8 @@ namespace SKSE
+ 		char                author[256] = {};
+ 		char                supportEmail[252] = {};
+ 		bool                noStructUse: 1 = false;
+-		std::uint8_t        padding1: 7 = 0;
++		bool                addressLibraryV5: 1 = false;  // kVersionIndependentEx_AddressLibraryV5 (SKSE 2.3+, Skyrim 1.7.99+)
++		std::uint8_t        padding1: 6 = 0;
+ 		std::uint8_t        padding2 = 0;
+ 		std::uint16_t       padding3 = 0;
+ 		bool                addressLibrary: 1 = false;
