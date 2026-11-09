@@ -4,6 +4,7 @@
     "description": "Yet Another Soul Trap Manager for Skyrim Special Edition",
     "homepage": "https://github.com/Seally/yastm",
     "license": "MIT",
+    "builtin-baseline": "a7b6122f6b6504d16d96117336a0562693579933",
     "dependencies": [
         "boost-container-hash",
         "boost-stl-interfaces",

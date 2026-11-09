@@ -5,8 +5,10 @@ on:
   workflow_dispatch:
 
 env:
-  # vcpkg pinned to the era YASTM was written in (fmt 9.1, spdlog 1.11).
-  VCPKG_COMMIT: a7b6122f6b6504d16d96117336a0562693579933 # tag 2023.02.24
+  # Current vcpkg tool; library versions are pinned to 2023 (fmt 9.1, spdlog 1.11)
+  # by "builtin-baseline" in vcpkg.json. A 2023 vcpkg checkout no longer works:
+  # its 7-Zip download URL is gone (404).
+  VCPKG_TAG: 2026.10.16
   VCPKG_ROOT: ${{ github.workspace }}\vcpkg
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-bincache
 
@@ -27,8 +29,9 @@ jobs:
 
       - name: Set up vcpkg
         run: |
+          # Full clone (not shallow): builtin-baseline needs the 2023 commit in history.
           git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
-          git -C "$env:VCPKG_ROOT" checkout $env:VCPKG_COMMIT
+          git -C "$env:VCPKG_ROOT" checkout $env:VCPKG_TAG
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
           New-Item -ItemType Directory -Force "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
 
@@ -36,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vcpkg-bincache
-          key: vcpkg-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ env.VCPKG_TAG }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure
         run: >
