@@ -119,3 +119,20 @@ index fb1b7e14..2bb1e952 100644
  		std::uint8_t        padding2 = 0;
  		std::uint16_t       padding3 = 0;
  		bool                addressLibrary: 1 = false;
+diff --git a/src/SKSE/Logger.cpp b/src/SKSE/Logger.cpp
+index db452816..ed188a4b 100644
+--- a/src/SKSE/Logger.cpp
++++ b/src/SKSE/Logger.cpp
+@@ -104,7 +104,11 @@ namespace SKSE
+ 
+ 			std::filesystem::path path = knownPath.get();
+ 			path /= "My Games"sv;
+-			path /= *REL::Relocation<const char**>(REL::ID(380738)).get();
++			// ID 380738 (save folder name string) is absent from the 1.7.x
++			// address library; mirror CommonLibSSE-NG's approach instead.
++			path /= std::filesystem::exists("steam_api64.dll") ?
++			            "Skyrim Special Edition"sv :
++			            "Skyrim Special Edition GOG"sv;
+ 			path /= "SKSE"sv;
+ 			return path;
+ 		}
